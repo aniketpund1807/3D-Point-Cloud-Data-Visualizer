@@ -16,8 +16,6 @@ db.sqlite3-journal
 
 # Media and static files
 /media/
-staticfiles/
-static/
 assets/
 
 # Environment variables
