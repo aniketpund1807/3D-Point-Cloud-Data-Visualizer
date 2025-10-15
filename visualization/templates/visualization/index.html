@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Point Cloud Visualizer</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Point Cloud Visualizer</h1>
+            <div class="controls">
+                <input type="file" id="folderInput" webkitdirectory directory multiple accept=".ply" style="display: none;">
+                <button id="loadButton" class="btn btn-primary">Load Point Cloud Data</button>
+                <div id="fileInfo" class="file-info">No files loaded</div>
+            </div>
+        </header>
+
+        <main>
+            <div class="visualization-container">
+                <div id="canvasContainer" class="canvas-container">
+                    <!-- Navigation Buttons -->
+                    <button id="leftBtn" class="nav-btn left-btn">←</button>
+                    <button id="rightBtn" class="nav-btn right-btn">→</button>
+                    <button id="upBtn" class="nav-btn up-btn">↑</button>
+                    <button id="downBtn" class="nav-btn down-btn">↓</button>
+
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Use UMD version of Three.js that doesn't require modules -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <!-- Use standalone versions that don't require import statements -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/PLYLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <!-- Our JavaScript -->
+    <script src="{% static 'js/main.js' %}"></script>
+</body>
+</html>
