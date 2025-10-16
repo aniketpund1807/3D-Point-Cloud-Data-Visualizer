@@ -41,7 +41,7 @@ class PointCloudVisualizer {
             const height = canvasContainer.clientHeight;
 
             // Improved camera setup to fit template page
-            this.camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 10000);
+            this.camera = new THREE.PerspectiveCamera(30, width / height, 0.1, 10000);
             this.camera.position.set(0, 0, 80); // Adjusted initial position
 
             this.renderer = new THREE.WebGLRenderer({
@@ -112,7 +112,7 @@ class PointCloudVisualizer {
         this.calculateGridOrganization();
         await this.loadInitialTiles();
 
-        fileInfo.textContent = `Loaded ${this.plyFiles.length} files. Initial 3x3 tiles loaded. Current tile: (${this.currentTile.x}, ${this.currentTile.y})`;
+        fileInfo.textContent = `Loaded ${this.plyFiles.length} files. Current tile: (${this.currentTile.x}, ${this.currentTile.y})`;
     }
 
     async analyzeAllFiles() {
@@ -199,7 +199,7 @@ class PointCloudVisualizer {
 
         const avgExtentX = totalExtentX / fileCount;
         const avgExtentY = totalExtentY / fileCount;
-        this.tileSize = Math.max(avgExtentX, avgExtentY) * 1.2;
+        this.tileSize = Math.max(avgExtentX, avgExtentY) * 2.0; // Increased to ensure separation
 
         this.organizeFilesIntoTiles();
     }
@@ -208,38 +208,60 @@ class PointCloudVisualizer {
         this.tileGrid.clear();
         this.allTileFiles.clear();
 
-        // First, organize all files into tiles
-        for (const [filename, coords] of this.fileCoordinates) {
-            const tileX = Math.floor((coords.centerX - this.minX) / this.tileSize);
-            const tileY = Math.floor((coords.centerY - this.minY) / this.tileSize);
+        // Create fixed 3x3 tile grid (9 tiles total)
+        const totalTilesX = 3;
+        const totalTilesY = 3;
 
-            const tileKey = `${tileX},${tileY}`;
-            const file = this.plyFiles.find(f => f.name === filename);
+        console.log(`Creating fixed 3x3 tile grid: ${totalTilesX}x${totalTilesY} tiles`);
 
-            if (file) {
-                if (!this.allTileFiles.has(tileKey)) {
-                    this.allTileFiles.set(tileKey, []);
-                }
-                this.allTileFiles.get(tileKey).push({
-                    file: file,
-                    originalCoords: coords,
-                    tileX: tileX,
-                    tileY: tileY
-                });
+        // Initialize all 9 tiles
+        for (let x = 0; x < totalTilesX; x++) {
+            for (let y = 0; y < totalTilesY; y++) {
+                const tileKey = `${x},${y}`;
+                this.allTileFiles.set(tileKey, []);
             }
         }
 
-        // Find center tile for initial view
-        const totalTilesX = Math.ceil((this.maxX - this.minX) / this.tileSize);
-        const totalTilesY = Math.ceil((this.maxY - this.minY) / this.tileSize);
+        // Get first 9 files (one for each tile)
+        const filesToUse = this.plyFiles.slice(0, 9);
+        
+        if (filesToUse.length < 9) {
+            console.warn(`Only ${filesToUse.length} files available, but 9 tiles needed`);
+        }
 
+        // Assign exactly one file to each tile in order
+        let fileIndex = 0;
+        for (let x = 0; x < totalTilesX; x++) {
+            for (let y = 0; y < totalTilesY; y++) {
+                if (fileIndex < filesToUse.length) {
+                    const file = filesToUse[fileIndex];
+                    const coords = this.fileCoordinates.get(file.name);
+                    const tileKey = `${x},${y}`;
+
+                    if (coords) {
+                        this.allTileFiles.set(tileKey, [{
+                            file: file,
+                            originalCoords: coords,
+                            tileX: x,
+                            tileY: y
+                        }]);
+                        console.log(`Assigned file ${file.name} to tile (${x}, ${y})`);
+                    } else {
+                        console.warn(`No coordinates found for file: ${file.name}`);
+                    }
+                    fileIndex++;
+                }
+            }
+        }
+
+        // Set center tile for initial view
         this.currentTile = {
-            x: Math.floor(totalTilesX / 2),
-            y: Math.floor(totalTilesY / 2)
+            x: 1, // Center of 3x3 grid
+            y: 1  // Center of 3x3 grid
         };
 
-        console.log(`Organized ${this.plyFiles.length} files into ${this.allTileFiles.size} tiles`);
-        console.log(`Grid size: ${totalTilesX}x${totalTilesY} tiles`);
+        console.log(`Organized ${Math.min(filesToUse.length, 9)} files into 9 tiles (3x3 grid)`);
+        console.log(`Fixed grid size: ${totalTilesX}x${totalTilesY} tiles`);
         console.log(`Initial tile: (${this.currentTile.x}, ${this.currentTile.y})`);
     }
 
@@ -247,27 +269,21 @@ class PointCloudVisualizer {
         this.clearCurrentPointClouds();
         this.initialTileFiles.clear();
 
-        // Load 3x3 grid around center tile (like in your image)
+        // Load ONLY the center tile initially (not all 9 tiles)
         const centerX = this.currentTile.x;
         const centerY = this.currentTile.y;
 
-        console.log('Loading initial 3x3 tiles around center:', centerX, centerY);
+        console.log('Loading initial center tile:', centerX, centerY);
 
-        // Load tiles in 3x3 grid pattern
-        for (let x = centerX - 1; x <= centerX + 1; x++) {
-            for (let y = centerY - 1; y <= centerY + 1; y++) {
-                const tileKey = `${x},${y}`;
-                const allFiles = this.allTileFiles.get(tileKey) || [];
-
-                if (allFiles.length > 0) {
-                    // For initial load, take only the first file from each tile
-                    const firstFile = allFiles[0];
-                    this.initialTileFiles.set(tileKey, [firstFile]);
-
-                    await this.loadFileForTile(firstFile);
-                    console.log(`Loaded initial file for tile (${x}, ${y}): ${firstFile.file.name}`);
-                }
-            }
+        const tileKey = `${centerX},${centerY}`;
+        const tileFiles = this.allTileFiles.get(tileKey);
+        
+        if (tileFiles && tileFiles.length > 0) {
+            // Load only the center tile file
+            const tileFile = tileFiles[0];
+            this.initialTileFiles.set(tileKey, [tileFile]);
+            await this.loadFileForTile(tileFile);
+            console.log(`Loaded file for center tile (${centerX}, ${centerY}): ${tileFile.file.name}`);
         }
 
         this.initialTilesLoaded = true;
@@ -278,17 +294,9 @@ class PointCloudVisualizer {
         this.clearCurrentPointClouds();
 
         const tileKey = `${this.currentTile.x},${this.currentTile.y}`;
-        let filesToLoad = [];
+        const filesToLoad = this.allTileFiles.get(tileKey) || [];
 
-        if (this.initialTilesLoaded) {
-            // After initial load, load ALL files for the current tile
-            filesToLoad = this.allTileFiles.get(tileKey) || [];
-            console.log(`Loading ALL ${filesToLoad.length} files for tile ${tileKey}`);
-        } else {
-            // During initial load, load only first file
-            filesToLoad = this.initialTileFiles.get(tileKey) || [];
-            console.log(`Loading initial file for tile ${tileKey}`);
-        }
+        console.log(`Loading file for tile ${tileKey}`);
 
         for (const tileFile of filesToLoad) {
             await this.loadFileForTile(tileFile);
@@ -304,18 +312,31 @@ class PointCloudVisualizer {
             loader.load(
                 URL.createObjectURL(tileFile.file),
                 (geometry) => {
+                    // Center the geometry at origin for better visualization
+                    geometry.computeBoundingBox();
+                    const bbox = geometry.boundingBox;
+                    const center = new THREE.Vector3();
+                    bbox.getCenter(center);
+                    geometry.translate(-center.x, -center.y, -center.z);
+
                     const material = new THREE.PointsMaterial({
-                        size: 0.1,
+                        size: 0.05, // Reduced point size for better visualization
                         vertexColors: true,
                         sizeAttenuation: true
                     });
 
                     const points = new THREE.Points(geometry, material);
 
+                    // Position the point cloud based on tile coordinates
+                    const offsetX = (tileFile.tileX - 1) * this.tileSize;
+                    const offsetY = (tileFile.tileY - 1) * this.tileSize;
+                    points.position.set(offsetX, offsetY, 0);
+
                     this.loadedPointClouds.set(tileFile.file.name, points);
                     this.currentPointClouds.push(points);
                     this.scene.add(points);
 
+                    console.log(`Visualized file: ${tileFile.file.name} at position (${offsetX}, ${offsetY}, 0)`);
                     resolve(points);
                 },
                 undefined,
@@ -328,20 +349,22 @@ class PointCloudVisualizer {
     }
 
     focusOnCurrentTile() {
-        const worldX = this.minX + (this.currentTile.x + 0.5) * this.tileSize;
-        const worldY = this.minY + (this.currentTile.y + 0.5) * this.tileSize;
+        const offsetX = (this.currentTile.x - 1) * this.tileSize;
+        const offsetY = (this.currentTile.y - 1) * this.tileSize;
 
-        // Improved camera positioning to fit template
-        this.controls.target.set(worldX, worldY, 0);
+        // Improved camera positioning
+        this.controls.target.set(offsetX, offsetY, 0);
 
         // Calculate optimal camera distance based on tile size
-        const optimalDistance = this.tileSize * 1.5;
-        this.camera.position.set(worldX, worldY, optimalDistance);
+        const optimalDistance = this.tileSize * 2.0;
+        this.camera.position.set(offsetX, offsetY, optimalDistance);
 
         this.controls.update();
 
         // Reset camera to ensure proper view
-        this.camera.lookAt(worldX, worldY, 0);
+        this.camera.lookAt(offsetX, offsetY, 0);
+
+        console.log(`Focused on tile (${this.currentTile.x}, ${this.currentTile.y}) at position (${offsetX}, ${offsetY}, 0)`);
     }
 
     navigate(direction) {
@@ -368,27 +391,25 @@ class PointCloudVisualizer {
                 break;
         }
 
-        const newTileKey = `${newTileX},${newTileY}`;
-        if (this.allTileFiles.has(newTileKey) || this.isValidTilePosition(newTileX, newTileY)) {
-            this.currentTile = { x: newTileX, y: newTileY };
-            this.loadCurrentTile();
-
+        // Check if new tile position is within 3x3 grid
+        if (newTileX >= 0 && newTileX < 3 && newTileY >= 0 && newTileY < 3) {
+            const newTileKey = `${newTileX},${newTileY}`;
             const tileFiles = this.allTileFiles.get(newTileKey) || [];
-            const loadedFiles = this.initialTilesLoaded ? tileFiles.length :
-                               (this.initialTileFiles.get(newTileKey) || []).length;
+            
+            if (tileFiles.length > 0) {
+                this.currentTile = { x: newTileX, y: newTileY };
+                this.loadCurrentTile();
 
-            document.getElementById('fileInfo').textContent =
-                `Current tile: (${newTileX}, ${newTileY}) - ${loadedFiles} files loaded`;
+                document.getElementById('fileInfo').textContent =
+                    `Current tile: (${newTileX}, ${newTileY}) - ${tileFiles[0].file.name}`;
+            } else {
+                console.log(`Tile (${newTileX}, ${newTileY}) has no file assigned`);
+                document.getElementById('fileInfo').textContent =
+                    `Current tile: (${newTileX}, ${newTileY}) - No file available`;
+            }
         } else {
-            console.log(`Tile (${newTileX}, ${newTileY}) is empty or out of bounds`);
+            console.log(`Tile (${newTileX}, ${newTileY}) is out of bounds`);
         }
-    }
-
-    isValidTilePosition(tileX, tileY) {
-        const totalTilesX = Math.ceil((this.maxX - this.minX) / this.tileSize);
-        const totalTilesY = Math.ceil((this.maxY - this.minY) / this.tileSize);
-
-        return tileX >= 0 && tileX < totalTilesX && tileY >= 0 && tileY < totalTilesY;
     }
 
     clearCurrentPointClouds() {
