@@ -1,4 +1,4 @@
-// Main Point Cloud Visualizer Class with Improved Tile System
+// Main Point Cloud Visualizer Class with Improved Tile System (Each tile should be separte .ply file)
 class PointCloudVisualizer {
     constructor() {
         this.scene = null;
